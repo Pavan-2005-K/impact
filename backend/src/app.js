@@ -16,7 +16,7 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const chatbotRoutes = require("./routes/chatbotRoutes");
 const { apiLimiter } = require("./middleware/rateLimitMiddleware");
-
+const uploadRoutes = require("./routes/uploadRoutes");
 app.use(cors());
 app.use(express.json());
 app.use("/api/auth", authRoutes);
@@ -30,7 +30,7 @@ app.use("/api/issues", issueRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/chatbot", chatbotRoutes);
-
+app.use("/api/uploads", uploadRoutes);
 
 // Welcome route
 app.get("/", (req, res) => {
