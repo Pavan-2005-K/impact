@@ -268,7 +268,12 @@ const registerOrganization = async (req, res) => {
 
 // Shared login for all roles
 const login = async (req, res) => {
-    const { email, password } = req.body;
+    console.log("Login request received:", {
+        contentType: req.get("content-type") || "missing",
+        bodyParsed: Boolean(req.body && typeof req.body === "object")
+    });
+
+    const { email, password } = req.body || {};
 
     if (!email || !password) {
         return res.status(400).json({

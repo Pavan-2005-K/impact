@@ -3,24 +3,31 @@ const pool = require("../config/db");
 const {
     invalidateDashboardCache
 } = require("../services/cacheService");
+const {
+    uploadImageToCloudinary
+} = require("../services/imageUploadService");
 
 // Helper: invalidate organization and group members' dashboards
 const invalidateTaskDashboards = async (campaignId, groupId, organizationId) => {
-    const members = await pool.query(
-        `SELECT volunteer_id
-         FROM campaign_group_members
-         WHERE group_id = $1`,
-        [groupId]
-    );
+    try {
+        const members = await pool.query(
+            `SELECT volunteer_id
+             FROM campaign_group_members
+             WHERE group_id = $1`,
+            [groupId]
+        );
 
-    const volunteerIds = members.rows.map(
-        member => Number(member.volunteer_id)
-    );
+        const volunteerIds = members.rows.map(
+            member => Number(member.volunteer_id)
+        );
 
-    await invalidateDashboardCache({
-        volunteerIds,
-        organizationIds: [Number(organizationId)]
-    });
+        await invalidateDashboardCache({
+            volunteerIds,
+            organizationIds: [Number(organizationId)]
+        });
+    } catch (error) {
+        console.error("Task dashboard cache invalidation error:", error);
+    }
 };
 
 
@@ -143,20 +150,76 @@ exports.getMyTasks = async (req, res) => {
 
 // 4. Group leader submits task completion and evidence
 exports.submitTask = async (req, res) => {
-    try {
-        const { taskId } = req.params;
-        const {
-            submissionNotes,
-            beforeImageUrl,
-            afterImageUrl
-        } = req.body;
+    let stage = "request validation";
+    let taskId;
 
-        if (!submissionNotes || !beforeImageUrl || !afterImageUrl) {
+    try {
+        ({ taskId } = req.params);
+        console.log(`submitTask started (task ${taskId})`);
+
+        const { submissionNotes } = req.body;
+        const afterImage = req.files?.afterImage?.[0];
+
+        console.log(`Task evidence submission received (task ${taskId})`);
+
+        if (
+            !(
+                typeof submissionNotes === "string" &&
+                submissionNotes.trim().length > 0
+            ) ||
+            !afterImage
+        ) {
             return res.status(400).json({
-                message: "Submission notes and both image URLs are required"
+                message: "Submission notes and the afterImage file are required."
             });
         }
 
+        stage = "task authorization";
+        const taskCheck = await pool.query(
+            `SELECT t.status, g.leader_id, c.organization_user_id
+             FROM campaign_tasks t
+             JOIN campaign_groups g ON g.id = t.group_id
+             JOIN campaigns c ON c.id = t.campaign_id
+             WHERE t.id = $1`,
+            [taskId]
+        );
+
+        if (taskCheck.rows.length === 0) {
+            return res.status(404).json({
+                message: "Task not found"
+            });
+        }
+
+        const taskToSubmit = taskCheck.rows[0];
+
+        if (Number(taskToSubmit.leader_id) !== Number(req.user.userId)) {
+            return res.status(403).json({
+                message: "Only the assigned group leader can submit task evidence"
+            });
+        }
+
+        if (!["PENDING", "IN_PROGRESS", "REJECTED"].includes(taskToSubmit.status)) {
+            return res.status(400).json({
+                message: "Task cannot be submitted in its current status"
+            });
+        }
+
+        stage = "Cloudinary upload";
+        console.log(`Task evidence afterImage upload starting (task ${taskId})`);
+        console.log(
+            `Starting afterImage Cloudinary upload (task ${taskId}; ` +
+            `${afterImage.originalname}; ${afterImage.mimetype})`
+        );
+        const afterUpload = await uploadImageToCloudinary(
+            afterImage,
+            "task-evidence/after"
+        );
+        console.log(`Task evidence afterImage upload completed (task ${taskId})`);
+
+        const beforeImageUrl = null;
+        const afterImageUrl = afterUpload.imageUrl;
+
+        stage = "database update";
         const result = await pool.query(
             `UPDATE campaign_tasks t
              SET
@@ -189,27 +252,22 @@ exports.submitTask = async (req, res) => {
 
         const task = result.rows[0];
 
-        const campaign = await pool.query(
-            `SELECT organization_user_id
-             FROM campaigns
-             WHERE id = $1`,
-            [task.campaign_id]
+        await invalidateTaskDashboards(
+            task.campaign_id,
+            task.group_id,
+            taskToSubmit.organization_user_id
         );
 
-        if (campaign.rows.length > 0) {
-            await invalidateTaskDashboards(
-                task.campaign_id,
-                task.group_id,
-                campaign.rows[0].organization_user_id
-            );
-        }
-
+        console.log(`Task evidence saved in PostgreSQL (task ${taskId})`);
         res.json({
             message: "Task evidence submitted successfully",
             task
         });
     } catch (error) {
-        console.error("Submit task error:", error);
+        console.error(
+            `Submit task failed during ${stage} (task ${taskId}):`,
+            error.message
+        );
         res.status(500).json({ message: "Server error" });
     }
 };

@@ -16,12 +16,14 @@ const {
 const {
     requireApprovedOrganization
 } = require("../middleware/organizationMiddleware");
+const upload = require("../middleware/uploadMiddleware");
 
 // Volunteer submits a report
 router.post(
     "/",
     authenticateToken,
     authorizeRoles("VOLUNTEER"),
+    upload.single("image"),
     createIssue
 );
 

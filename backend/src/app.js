@@ -19,6 +19,7 @@ const { apiLimiter } = require("./middleware/rateLimitMiddleware");
 const uploadRoutes = require("./routes/uploadRoutes");
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/campaigns", campaignRoutes);

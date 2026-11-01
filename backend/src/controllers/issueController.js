@@ -3,6 +3,9 @@ const pool = require("../config/db");
 const {
     invalidateDashboardCache
 } = require("../services/cacheService");
+const {
+    uploadImageToCloudinary
+} = require("../services/imageUploadService");
 
 // Invalidate dashboards affected by an issue report
 const invalidateIssueDashboards = async (report) => {
@@ -36,8 +39,7 @@ exports.createIssue = async (req, res) => {
             city,
             state,
             latitude,
-            longitude,
-            imageUrl
+            longitude
         } = req.body;
 
         if (!title || !description || !category || !location || !city) {
@@ -45,6 +47,14 @@ exports.createIssue = async (req, res) => {
                 message: "Title, description, category, location and city are required"
             });
         }
+
+        const uploadedImage = req.file
+            ? await uploadImageToCloudinary(req.file, "issue-reports")
+            : null;
+
+        const imageUrl = uploadedImage
+            ? uploadedImage.imageUrl
+            : null;
 
         const result = await pool.query(
             `INSERT INTO issue_reports (
