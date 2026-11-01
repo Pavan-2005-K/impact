@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 590" fill="none">
+  <rect width="760" height="590" rx="32" fill="#E8E4CF"/>
+  <circle cx="605" cy="111" r="44" fill="#D4C4A8"/>
+  <path d="M0 419c116-39 202-12 304 11 126 28 272 33 456-29v189H0V419Z" fill="#778D7A"/>
+  <path d="M0 475c140-36 236-9 353 15 146 30 261 23 407-19v119H0V475Z" fill="#415A77"/>
+  <path d="M337 375c7-62 9-125 2-195" stroke="#705843" stroke-width="25" stroke-linecap="round"/>
+  <path d="M345 267c-38-33-61-65-76-106M345 246c43-34 68-70 83-116" stroke="#705843" stroke-width="15" stroke-linecap="round"/>
+  <circle cx="261" cy="139" r="65" fill="#778D7A"/>
+  <circle cx="340" cy="121" r="78" fill="#526B5D"/>
+  <circle cx="423" cy="142" r="63" fill="#778D7A"/>
+  <circle cx="306" cy="183" r="59" fill="#8A9B82"/>
+  <circle cx="391" cy="186" r="56" fill="#8A9B82"/>
+  <path d="M219 467c4-63 25-97 61-97s56 34 61 97" fill="#D4C4A8"/>
+  <circle cx="280" cy="346" r="29" fill="#B87555"/>
+  <path d="M428 465c5-70 27-107 65-107s60 37 65 107" fill="#1B263B"/>
+  <circle cx="493" cy="326" r="31" fill="#D9A277"/>
+  <path d="M136 480c4-56 22-85 53-85s49 29 53 85" fill="#D4C4A8"/>
+  <circle cx="189" cy="373" r="25" fill="#8D5E4A"/>
+  <path d="M531 478c4-57 22-86 53-86s49 29 53 86" fill="#F4F1DE"/>
+  <circle cx="584" cy="374" r="25" fill="#C98E67"/>
+  <path d="m88 445 28-56 29 56H88ZM614 450l27-54 28 54h-55Z" fill="#D4C4A8"/>
+  <path d="M106 445v40m554-35v36" stroke="#526B5D" stroke-width="7" stroke-linecap="round"/>
+  <path d="M90 487c9-22 20-31 34-31 16 0 26 11 33 31m430 0c8-24 20-36 37-36 15 0 27 12 35 36" stroke="#F4F1DE" stroke-width="6" stroke-linecap="round"/>
+  <path d="M361 479c17-17 33-17 48 0-15 17-31 17-48 0Z" fill="#F4F1DE"/>
+  <path d="M385 479c17-17 33-17 48 0-15 17-31 17-48 0Z" fill="#D4C4A8"/>
+  <path d="M383 481v28" stroke="#F4F1DE" stroke-width="4" stroke-linecap="round"/>
+  <g fill="#F4F1DE">
+    <path d="m127 204 6 13 14 2-10 10 2 14-12-7-12 7 2-14-10-10 14-2 6-13Zm495 88 5 11 12 2-9 8 2 12-10-6-10 6 2-12-9-8 12-2 5-11Z"/>
+  </g>
+</svg>
