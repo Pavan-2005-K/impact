@@ -3,6 +3,10 @@ const pool = require("../config/db");
 const {
     getRecommendedCampaigns
 } = require("../services/matchingService");
+const {
+    invalidateDashboardCache,
+    invalidateVolunteerMatchingCache
+} = require("../services/cacheService");
 
 // Volunteer applies for a campaign
 const applyForCampaign = async (req, res) => {
@@ -15,9 +19,11 @@ const applyForCampaign = async (req, res) => {
     }
 
     try {
+        const volunteerId = req.user.userId;
+
         // Generate the volunteer's matching score
         const recommendations = await getRecommendedCampaigns(
-            req.user.userId
+            volunteerId
         );
 
         if (recommendations === null) {
@@ -36,6 +42,23 @@ const applyForCampaign = async (req, res) => {
             });
         }
 
+        // Find the organization that owns this campaign
+        const campaignOwner = await pool.query(
+            `SELECT organization_user_id
+             FROM campaigns
+             WHERE id = $1`,
+            [campaignId]
+        );
+
+        if (campaignOwner.rows.length === 0) {
+            return res.status(404).json({
+                message: "Campaign not found"
+            });
+        }
+
+        const organizationId =
+            campaignOwner.rows[0].organization_user_id;
+
         const result = await pool.query(
             `INSERT INTO campaign_applications
                 (campaign_id, volunteer_id, match_score, score_breakdown)
@@ -44,7 +67,7 @@ const applyForCampaign = async (req, res) => {
              RETURNING *`,
             [
                 campaignId,
-                req.user.userId,
+                volunteerId,
                 match.matchScore,
                 JSON.stringify(match.breakdown)
             ]
@@ -55,6 +78,15 @@ const applyForCampaign = async (req, res) => {
                 message: "You have already applied for this campaign"
             });
         }
+
+        // Invalidate affected dashboards
+        await invalidateDashboardCache({
+            volunteerIds: [volunteerId],
+            organizationIds: [organizationId],
+            admin: true
+        });
+
+        await invalidateVolunteerMatchingCache(volunteerId);
 
         res.status(201).json({
             message: "Campaign application submitted successfully",
@@ -146,8 +178,13 @@ const reviewApplication = async (req, res) => {
 
         // Lock campaign row to prevent concurrent overbooking
         const applicationResult = await client.query(
-            `SELECT a.id, a.campaign_id, a.status,
-                    c.max_volunteers, c.organization_user_id
+            `SELECT
+                a.id,
+                a.campaign_id,
+                a.volunteer_id,
+                a.status,
+                c.max_volunteers,
+                c.organization_user_id
              FROM campaign_applications a
              JOIN campaigns c ON c.id = a.campaign_id
              WHERE a.id = $1
@@ -208,6 +245,13 @@ const reviewApplication = async (req, res) => {
         );
 
         await client.query("COMMIT");
+
+        // Invalidate affected dashboards after successful database update
+        await invalidateDashboardCache({
+            volunteerIds: [application.volunteer_id],
+            organizationIds: [req.user.userId],
+            admin: true
+        });
 
         res.json({
             message: finalStatus === "CONFIRMED"

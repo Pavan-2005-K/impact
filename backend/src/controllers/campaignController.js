@@ -1,5 +1,68 @@
 
 const pool = require("../config/db");
+const { redisClient } = require("../config/redis");
+const {
+    invalidateDashboardCache,
+    invalidateAllMatchingCaches
+} = require("../services/cacheService");
+
+const CACHE_TTL = 300;
+
+// Get cached campaign data
+const getCachedCampaigns = async (key) => {
+    try {
+        if (!redisClient.isReady) return null;
+
+        const cachedData = await redisClient.get(key);
+
+        if (cachedData) {
+            console.log(`Redis CAMPAIGN CACHE HIT: ${key}`);
+            return JSON.parse(cachedData);
+        }
+
+        console.log(`Redis CAMPAIGN CACHE MISS: ${key}`);
+        return null;
+
+    } catch (error) {
+        console.error("Campaign cache read error:", error.message);
+        return null;
+    }
+};
+
+// Save campaign data in Redis
+const setCachedCampaigns = async (key, data) => {
+    try {
+        if (!redisClient.isReady) return;
+
+        await redisClient.setEx(
+            key,
+            CACHE_TTL,
+            JSON.stringify(data)
+        );
+
+        console.log(`Redis CAMPAIGN CACHE SAVED: ${key}`);
+
+    } catch (error) {
+        console.error("Campaign cache write error:", error.message);
+    }
+};
+
+// Invalidate an organization's campaign cache
+const invalidateCampaignCache = async (organizationId) => {
+    try {
+        if (!redisClient.isReady) return;
+
+        const key = `campaigns:organization:${organizationId}`;
+
+        await redisClient.del(key);
+
+        console.log(`Redis CAMPAIGN CACHE INVALIDATED: ${key}`);
+
+    } catch (error) {
+        console.error("Campaign cache invalidation error:", error.message);
+    }
+};
+
 
 // Create a campaign
 const createCampaign = async (req, res) => {
@@ -119,6 +182,16 @@ const createCampaign = async (req, res) => {
 
         await client.query("COMMIT");
 
+        // Invalidate campaign and dashboard caches
+        await invalidateCampaignCache(req.user.userId);
+
+        await invalidateDashboardCache({
+            organizationIds: [req.user.userId],
+            admin: true
+        });
+
+        await invalidateAllMatchingCaches();
+
         res.status(201).json({
             message: "Campaign created successfully",
             campaign
@@ -148,6 +221,17 @@ const createCampaign = async (req, res) => {
 // Get campaigns created by the logged-in organization
 const getMyCampaigns = async (req, res) => {
     try {
+        const organizationId = req.user.userId;
+        const cacheKey = `campaigns:organization:${organizationId}`;
+
+        // Check Redis first
+        const cachedData = await getCachedCampaigns(cacheKey);
+
+        if (cachedData) {
+            return res.json(cachedData);
+        }
+
+        // Fetch from PostgreSQL if cache misses
         const result = await pool.query(
             `SELECT
                 c.*,
@@ -166,13 +250,18 @@ const getMyCampaigns = async (req, res) => {
              WHERE c.organization_user_id = $1
              GROUP BY c.id
              ORDER BY c.created_at DESC`,
-            [req.user.userId]
+            [organizationId]
         );
 
-        res.json({
+        const responseData = {
             count: result.rows.length,
             campaigns: result.rows
-        });
+        };
+
+        // Save response in Redis
+        await setCachedCampaigns(cacheKey, responseData);
+
+        res.json(responseData);
 
     } catch (error) {
         console.error("Get organization campaigns error:", error);

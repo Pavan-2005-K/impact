@@ -5,13 +5,59 @@ const {
 } = require("../services/matchingService");
 
 const { generateAIResponse } = require("../services/groqService");
+const { redisClient } = require("../config/redis");
+
+const MATCHING_CACHE_TTL = 300;
+
+const getCachedMatching = async (key) => {
+    try {
+        if (!redisClient.isReady) return null;
+
+        const cached = await redisClient.get(key);
+
+        if (cached) {
+            console.log(`Redis MATCHING CACHE HIT: ${key}`);
+            return JSON.parse(cached);
+        }
+
+        console.log(`Redis MATCHING CACHE MISS: ${key}`);
+        return null;
+    } catch (error) {
+        console.error("Matching cache read error:", error.message);
+        return null;
+    }
+};
+
+const setCachedMatching = async (key, data) => {
+    try {
+        if (!redisClient.isReady) return;
+
+        await redisClient.setEx(
+            key,
+            MATCHING_CACHE_TTL,
+            JSON.stringify(data)
+        );
+
+        console.log(`Redis MATCHING CACHE SAVED: ${key}`);
+    } catch (error) {
+        console.error("Matching cache write error:", error.message);
+    }
+};
 
 // Volunteer dashboard recommendations
 const getVolunteerRecommendations = async (req, res) => {
     try {
-        const recommendations = await getRecommendedCampaigns(
-            req.user.userId
-        );
+        const cacheKey = `matching:volunteer:${req.user.userId}`;
+
+        let recommendations = await getCachedMatching(cacheKey);
+
+        if (recommendations === null) {
+            recommendations = await getRecommendedCampaigns(req.user.userId);
+
+            if (recommendations !== null) {
+                await setCachedMatching(cacheKey, recommendations);
+            }
+        }
 
         if (recommendations === null) {
             return res.status(404).json({
@@ -45,9 +91,17 @@ const getVolunteerRecommendations = async (req, res) => {
 const getAIMatchingRecommendations = async (req, res) => {
     try {
         // Get recommendations from our existing matching algorithm
-        const recommendations = await getRecommendedCampaigns(
-            req.user.userId
-        );
+        const cacheKey = `matching:volunteer:${req.user.userId}`;
+
+        let recommendations = await getCachedMatching(cacheKey);
+
+        if (recommendations === null) {
+            recommendations = await getRecommendedCampaigns(req.user.userId);
+
+            if (recommendations !== null) {
+                await setCachedMatching(cacheKey, recommendations);
+            }
+        }
 
         if (recommendations === null) {
             return res.status(404).json({
