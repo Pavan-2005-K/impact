@@ -1,9 +1,58 @@
+
 const pool = require("../config/db");
+const { redisClient } = require("../config/redis");
+
+const CACHE_TTL = 300;
+
+// Get cached dashboard data
+const getCachedData = async (key) => {
+    try {
+        if (!redisClient.isReady) return null;
+
+        const cachedData = await redisClient.get(key);
+
+        if (cachedData) {
+            console.log(`Redis CACHE HIT: ${key}`);
+            return JSON.parse(cachedData);
+        }
+
+        console.log(`Redis CACHE MISS: ${key}`);
+        return null;
+    } catch (error) {
+        console.error("Redis cache read error:", error.message);
+        return null;
+    }
+};
+
+// Save dashboard data in Redis
+const setCachedData = async (key, data) => {
+    try {
+        if (!redisClient.isReady) return;
+
+        await redisClient.setEx(
+            key,
+            CACHE_TTL,
+            JSON.stringify(data)
+        );
+
+        console.log(`Redis CACHE SAVED: ${key}`);
+    } catch (error) {
+        console.error("Redis cache write error:", error.message);
+    }
+};
+
 
 // VOLUNTEER DASHBOARD
 exports.getVolunteerDashboard = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const cacheKey = `dashboard:volunteer:${userId}`;
+
+        const cachedData = await getCachedData(cacheKey);
+
+        if (cachedData) {
+            return res.json(cachedData);
+        }
 
         const result = await pool.query(
             `SELECT
@@ -55,10 +104,15 @@ exports.getVolunteerDashboard = async (req, res) => {
             [userId]
         );
 
-        res.json({
+        const responseData = {
             dashboard: result.rows[0],
             recentCampaigns: campaigns.rows
-        });
+        };
+
+        await setCachedData(cacheKey, responseData);
+
+        res.json(responseData);
+
     } catch (error) {
         console.error("Volunteer dashboard error:", error);
         res.status(500).json({ message: "Server error" });
@@ -70,6 +124,13 @@ exports.getVolunteerDashboard = async (req, res) => {
 exports.getOrganizationDashboard = async (req, res) => {
     try {
         const userId = req.user.userId;
+        const cacheKey = `dashboard:organization:${userId}`;
+
+        const cachedData = await getCachedData(cacheKey);
+
+        if (cachedData) {
+            return res.json(cachedData);
+        }
 
         const result = await pool.query(
             `SELECT
@@ -138,10 +199,15 @@ exports.getOrganizationDashboard = async (req, res) => {
             [userId]
         );
 
-        res.json({
+        const responseData = {
             dashboard: result.rows[0],
             recentCampaigns: campaigns.rows
-        });
+        };
+
+        await setCachedData(cacheKey, responseData);
+
+        res.json(responseData);
+
     } catch (error) {
         console.error("Organization dashboard error:", error);
         res.status(500).json({ message: "Server error" });
@@ -152,6 +218,14 @@ exports.getOrganizationDashboard = async (req, res) => {
 // ADMIN DASHBOARD
 exports.getAdminDashboard = async (req, res) => {
     try {
+        const cacheKey = "dashboard:admin";
+
+        const cachedData = await getCachedData(cacheKey);
+
+        if (cachedData) {
+            return res.json(cachedData);
+        }
+
         const result = await pool.query(
             `SELECT
                 (SELECT COUNT(*) FROM users
@@ -193,10 +267,15 @@ exports.getAdminDashboard = async (req, res) => {
              LIMIT 5`
         );
 
-        res.json({
+        const responseData = {
             dashboard: result.rows[0],
             recentOrganizations: organizations.rows
-        });
+        };
+
+        await setCachedData(cacheKey, responseData);
+
+        res.json(responseData);
+
     } catch (error) {
         console.error("Admin dashboard error:", error);
         res.status(500).json({ message: "Server error" });
