@@ -15,7 +15,7 @@ const app = express();
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const chatbotRoutes = require("./routes/chatbotRoutes");
-
+const { apiLimiter } = require("./middleware/rateLimitMiddleware");
 
 app.use(cors());
 app.use(express.json());
