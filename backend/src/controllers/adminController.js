@@ -1,5 +1,6 @@
 
 const pool = require("../config/db");
+const { invalidateDashboardCache } = require("../services/cacheService");
 
 // View organizations waiting for approval
 const getPendingOrganizations = async (req, res) => {
@@ -81,6 +82,12 @@ const reviewOrganization = async (req, res) => {
                 message: "Pending organization not found, or it has already been reviewed"
             });
         }
+
+        // Invalidate admin and reviewed organization's dashboard caches
+        await invalidateDashboardCache({
+            organizationIds: [Number(organizationId)],
+            admin: true
+        });
 
         res.json({
             message: `Organization ${status.toLowerCase()} successfully`,

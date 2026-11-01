@@ -1,4 +1,7 @@
 const pool = require("../config/db");
+const {
+    invalidateDashboardCache
+} = require("../services/cacheService");
 
 // Organization creates a group for its campaign
 exports.createGroup = async (req, res) => {
@@ -123,6 +126,11 @@ exports.addGroupMember = async (req, res) => {
         );
 
         await client.query("COMMIT");
+
+        // Invalidate the volunteer's dashboard cache
+        await invalidateDashboardCache({
+            volunteerIds: [Number(volunteerId)]
+        });
 
         res.status(201).json({
             message: "Volunteer added to group successfully",

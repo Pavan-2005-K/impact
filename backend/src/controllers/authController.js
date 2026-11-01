@@ -2,6 +2,7 @@
 const pool = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { invalidateDashboardCache } = require("../services/cacheService");
 
 // Volunteer registration
 const registerVolunteer = async (req, res) => {
@@ -54,7 +55,6 @@ const registerVolunteer = async (req, res) => {
         await client.query("BEGIN");
 
         const normalizedEmail = email.trim().toLowerCase();
-
         const passwordHash = await bcrypt.hash(password, 12);
 
         const userResult = await client.query(
@@ -114,6 +114,11 @@ const registerVolunteer = async (req, res) => {
         }
 
         await client.query("COMMIT");
+
+        // New volunteer changes admin dashboard statistics
+        await invalidateDashboardCache({
+            admin: true
+        });
 
         res.status(201).json({
             message: "Volunteer registered successfully",
@@ -228,6 +233,11 @@ const registerOrganization = async (req, res) => {
         );
 
         await client.query("COMMIT");
+
+        // New organization changes admin dashboard statistics
+        await invalidateDashboardCache({
+            admin: true
+        });
 
         res.status(201).json({
             message: "Organization registered successfully. Await admin approval.",

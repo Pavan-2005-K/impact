@@ -1,4 +1,28 @@
+
 const pool = require("../config/db");
+const {
+    invalidateDashboardCache
+} = require("../services/cacheService");
+
+// Helper: invalidate organization and group members' dashboards
+const invalidateTaskDashboards = async (campaignId, groupId, organizationId) => {
+    const members = await pool.query(
+        `SELECT volunteer_id
+         FROM campaign_group_members
+         WHERE group_id = $1`,
+        [groupId]
+    );
+
+    const volunteerIds = members.rows.map(
+        member => Number(member.volunteer_id)
+    );
+
+    await invalidateDashboardCache({
+        volunteerIds,
+        organizationIds: [Number(organizationId)]
+    });
+};
+
 
 // 1. Organization creates and assigns a task to a group
 exports.createTask = async (req, res) => {
@@ -40,6 +64,12 @@ exports.createTask = async (req, res) => {
                 description || null,
                 dueDate || null
             ]
+        );
+
+        await invalidateTaskDashboards(
+            campaignId,
+            groupId,
+            req.user.userId
         );
 
         res.status(201).json({
@@ -157,9 +187,26 @@ exports.submitTask = async (req, res) => {
             });
         }
 
+        const task = result.rows[0];
+
+        const campaign = await pool.query(
+            `SELECT organization_user_id
+             FROM campaigns
+             WHERE id = $1`,
+            [task.campaign_id]
+        );
+
+        if (campaign.rows.length > 0) {
+            await invalidateTaskDashboards(
+                task.campaign_id,
+                task.group_id,
+                campaign.rows[0].organization_user_id
+            );
+        }
+
         res.json({
             message: "Task evidence submitted successfully",
-            task: result.rows[0]
+            task
         });
     } catch (error) {
         console.error("Submit task error:", error);
@@ -207,11 +254,19 @@ exports.reviewTask = async (req, res) => {
             });
         }
 
+        const task = result.rows[0];
+
+        await invalidateTaskDashboards(
+            task.campaign_id,
+            task.group_id,
+            req.user.userId
+        );
+
         res.json({
             message: status === "VERIFIED"
                 ? "Task evidence verified successfully"
                 : "Task evidence rejected",
-            task: result.rows[0]
+            task
         });
     } catch (error) {
         console.error("Review task error:", error);

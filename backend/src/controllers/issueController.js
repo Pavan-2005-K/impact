@@ -1,4 +1,29 @@
+
 const pool = require("../config/db");
+const {
+    invalidateDashboardCache
+} = require("../services/cacheService");
+
+// Invalidate dashboards affected by an issue report
+const invalidateIssueDashboards = async (report) => {
+    const organizations = await pool.query(
+        `SELECT user_id
+         FROM organizations
+         WHERE LOWER(city) = LOWER($1)`,
+        [report.city]
+    );
+
+    const organizationIds = organizations.rows.map(
+        organization => Number(organization.user_id)
+    );
+
+    await invalidateDashboardCache({
+        volunteerIds: [Number(report.reporter_id)],
+        organizationIds,
+        admin: true
+    });
+};
+
 
 // Volunteer submits a community issue
 exports.createIssue = async (req, res) => {
@@ -42,9 +67,13 @@ exports.createIssue = async (req, res) => {
             ]
         );
 
+        const report = result.rows[0];
+
+        await invalidateIssueDashboards(report);
+
         res.status(201).json({
             message: "Community issue reported successfully",
-            report: result.rows[0]
+            report
         });
     } catch (error) {
         console.error("Create issue error:", error);
@@ -108,7 +137,12 @@ exports.reviewIssue = async (req, res) => {
         const { reportId } = req.params;
         const { status, feedback, campaignId } = req.body;
 
-        const allowedStatuses = ["UNDER_REVIEW", "ACCEPTED", "REJECTED", "RESOLVED"];
+        const allowedStatuses = [
+            "UNDER_REVIEW",
+            "ACCEPTED",
+            "REJECTED",
+            "RESOLVED"
+        ];
 
         if (!allowedStatuses.includes(status)) {
             return res.status(400).json({
@@ -159,9 +193,13 @@ exports.reviewIssue = async (req, res) => {
             });
         }
 
+        const report = result.rows[0];
+
+        await invalidateIssueDashboards(report);
+
         res.json({
             message: "Issue report updated successfully",
-            report: result.rows[0]
+            report
         });
     } catch (error) {
         console.error("Review issue error:", error);
